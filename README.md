@@ -61,6 +61,12 @@ En la barra **Alertas**, debajo de los controles:
 
 Los botones ▶ prueban cada sonido. El navegador solo habilita el audio después de un clic en la página: si la abrís y no la tocás, no suena. Las alertas siguen funcionando con la pestaña en segundo plano, pero no con el navegador cerrado ni con la compu suspendida.
 
+## Prueba histórica
+
+`backtest/backtest.py` baja las últimas semanas de ticks de Deriv y de operaciones de Binance Futuros, arma velas M15 con el mismo cálculo de la página y mide qué hizo la vela siguiente después de cada lectura (flecha ≥90 %, patrón, Bien/Cuidado). Corre en GitHub Actions y deja el informe en [`backtest/resultados/resultados.md`](backtest/resultados/resultados.md).
+
+Para repetirla: pestaña *Actions → Prueba histórica → Run workflow* (se puede elegir cuántos días).
+
 ## Limitaciones
 
 - El "volumen" de Deriv no es volumen real: es la cantidad de veces que el broker publicó cada precio.
