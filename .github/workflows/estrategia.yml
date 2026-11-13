@@ -1,0 +1,47 @@
+name: Simulación de la estrategia
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Días hacia atrás"
+        default: "21"
+      costo:
+        description: "Costo por posición en USD (spread + comisión, lote 0,01)"
+        default: "0.40"
+  push:
+    branches: [main]
+    paths:
+      - "backtest/estrategia.py"
+      - ".github/workflows/estrategia.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: estrategia
+  cancel-in-progress: true
+
+jobs:
+  simular:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install websockets numpy
+      - name: Descargar datos y simular
+        env:
+          DAYS: ${{ github.event.inputs.days || '21' }}
+          COSTO: ${{ github.event.inputs.costo || '0.40' }}
+        run: python backtest/estrategia.py
+      - name: Guardar resultados en el repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backtest/resultados
+          git diff --cached --quiet || git commit -m "Resultados de la simulación de la estrategia [skip ci]"
+          git pull --rebase origin main
+          git push
