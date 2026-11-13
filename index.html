@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Volumen XAUUSD</title>
+<style>
+  :root{
+    --bg:#11151c; --panel:#1a202b; --panel2:#222a37; --line:#2f394a;
+    --text:#e8ecf2; --muted:#8a96a8; --up:#3fb56b; --down:#e0604c; --flat:#9aa3b0;
+    --gold:#e7b84a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .num{font-variant-numeric:tabular-nums}
+  header{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:end;padding:12px 16px;
+    background:var(--panel);border-bottom:1px solid var(--line)}
+  header h1{font-size:17px;margin:0 8px 4px 0;font-weight:650;letter-spacing:.2px}
+  header h1 b{color:var(--gold);font-weight:650}
+  label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  select,input[type=number],input[type=text]{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    border-radius:6px;padding:6px 8px;font:inherit;min-width:74px}
+  input[type=number]{width:74px}
+  input[type=text]{width:130px}
+  label.chk{flex-direction:row;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:12px;padding-bottom:7px}
+  .hide{display:none !important}
+  #status{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);padding-bottom:7px;text-align:right}
+  #dot{width:9px;height:9px;border-radius:50%;background:var(--flat);flex:none}
+  #dot.ok{background:var(--up)} #dot.bad{background:var(--down)} #dot.load{background:var(--gold)}
+  main{padding:14px 16px 24px;display:grid;gap:14px}
+  .hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card h2{margin:0 0 8px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+  .pair{display:flex;gap:22px;align-items:center}
+  .side{display:flex;align-items:center;gap:8px;font-size:38px;font-weight:700;line-height:1}
+  .side small{font-size:18px;font-weight:600}
+  .side.up{color:var(--up)} .side.down{color:var(--down)}
+  .side.dim{opacity:.38}
+  .note{margin-top:8px;font-size:12.5px;color:var(--muted)}
+  .note b{color:var(--text);font-weight:600}
+  .big{font-size:30px;font-weight:700}
+  .wrap{display:grid;grid-template-columns:190px 1fr;gap:14px;align-items:stretch}
+  @media (max-width:760px){.wrap{grid-template-columns:1fr}}
+  #cols{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+  .col{flex:1 0 92px;min-width:92px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+    padding:8px 6px 6px;display:flex;flex-direction:column;align-items:center;gap:4px}
+  .col.now{border-color:var(--gold)}
+  .pct{font-size:19px;font-weight:700}
+  .t-green{color:var(--up)} .t-red{color:var(--down)} .t-white{color:var(--text)}
+  .poc{font-size:12px;color:var(--text)} .cnt{font-size:11px;color:var(--muted);text-align:center}
+  .col canvas{width:100%;height:230px;display:block;border-radius:4px;background:#141922}
+  .vbar{width:100%;height:56px;display:flex;align-items:flex-end}
+  .vbar i{display:block;width:100%;border-radius:3px 3px 0 0;min-height:2px}
+  .time{font-size:12px;color:var(--muted)}
+  #gprof{width:100%;height:392px;display:block;border-radius:4px;background:#141922}
+  details{color:var(--muted);font-size:12.5px;max-width:880px}
+  details summary{cursor:pointer;color:var(--text)}
+  details p{margin:6px 0}
+  #err{color:var(--down);font-size:13px;min-height:1em}
+</style>
+</head>
+<body>
+<header>
+  <h1>Volumen <b>XAUUSD</b></h1>
+  <label>Fuente
+    <select id="source">
+      <option value="deriv">Deriv · ticks (como va-mod)</option>
+      <option value="binance">Binance Futuros · XAUUSDT</option>
+      <option value="okx">OKX · XAU-USDT-SWAP</option>
+    </select></label>
+  <label>Símbolo<input id="symbol" type="text" spellcheck="false"></label>
+  <label>Temporalidad
+    <select id="bar">
+      <option value="15">15 s</option><option value="60">M1</option><option value="120">M2</option>
+      <option value="180">M3</option><option value="240">M4</option><option value="300">M5</option>
+      <option value="600">M10</option><option value="900" selected>M15</option><option value="1800">M30</option>
+      <option value="3600">H1</option><option value="14400">H4</option>
+    </select></label>
+  <label>Velas<input id="period" type="number" min="2" max="40" value="10"></label>
+  <label>Redondeo
+    <select id="dec">
+      <option value="-1" selected>Sin redondeo</option>
+      <option value="2">2 decimales</option><option value="1">1 decimal</option><option value="0">0 decimales</option>
+    </select></label>
+  <label id="measureBox">Medir por
+    <select id="measure">
+      <option value="vol">Volumen negociado</option>
+      <option value="count">Cantidad de operaciones</option>
+    </select></label>
+  <label class="chk" id="countAllBox"><input id="countAll" type="checkbox"> Contar ticks repetidos en vivo</label>
+  <div id="status"><span id="stxt">Conectando…</span><span id="dot" class="load"></span></div>
+</header>
+
+<main>
+  <div id="err"></div>
+  <section class="hero">
+    <div class="card"><h2 id="prevTitle">Vela anterior (cerrada)</h2><div id="prev"></div></div>
+    <div class="card"><h2 id="nowTitle">Vela en curso</h2><div id="now"></div></div>
+    <div class="card"><h2>Precio</h2><div class="big num" id="price">—</div>
+      <div class="note">Cierra en <b class="num" id="left">—</b> · <span class="num" id="ticksInfo"></span></div>
+      <div class="note" id="srcNote"></div></div>
+  </section>
+
+  <section class="wrap">
+    <div class="card"><h2>Perfil del período</h2><canvas id="gprof"></canvas>
+      <div class="note">Máx. volumen: <b class="num" id="gpoc">—</b></div></div>
+    <div class="card"><h2>Por vela (la más nueva a la derecha)</h2><div id="cols"></div></div>
+  </section>
+
+  <details>
+    <summary>Cómo se calcula</summary>
+    <p>En cada vela se suma el volumen que cayó en cada precio. El precio con más volumen es el máximo volumen. El porcentaje indica en qué lugar del rango de la vela quedó ese precio, contando los niveles desde el máximo hacia abajo: si la vela es alcista se muestra ese valor con ⬈; si es bajista, 100 menos ese valor con ⬊; si da 50 o la vela no tiene cuerpo, ⬍.</p>
+    <p>El color compara el máximo volumen con el último precio de la vela: verde si el máximo volumen está por debajo, rojo si está por encima.</p>
+    <p><b>Deriv</b> da ticks de precio (uno por segundo, aprox.) sin volumen real: ahí el volumen es la cantidad de ticks, igual que en va-mod.ru. <b>Binance</b> y <b>OKX</b> dan operaciones reales de sus futuros perpetuos de oro, con tamaño: se puede medir por volumen negociado o por cantidad de operaciones. Esos contratos cotizan en USDT y 24 h, así que el precio difiere unos dólares del XAUUSD de tu broker y también hay datos el fin de semana.</p>
+  </details>
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ======================= configuración de fuentes ======================= */
+  var SOURCES = {
+    deriv:   { symbol:"frxXAUUSD",     kind:"ticks",  note:"Ticks de Deriv (volumen = cantidad de ticks)." },
+    binance: { symbol:"XAUUSDT",       kind:"trades", note:"Operaciones del perpetuo XAUUSDT de Binance Futuros (precio en USDT)." },
+    okx:     { symbol:"XAU-USDT-SWAP", kind:"trades", note:"Operaciones del perpetuo XAU-USDT-SWAP de OKX (precio en USDT, paso 0,1)." }
+  };
+  var DERIV_URLS = ["wss://api.derivws.com/trading/v1/options/ws/public",
+                    "wss://ws.derivws.com/websockets/v3?app_id=1089"];
+  var MAX_TICKS = 150000;
+
+  var $ = function(id){ return document.getElementById(id); };
+  var S = { source:"deriv", symbol:"", bar:900, period:10, dec:-1, measure:"vol", countAll:false };
+  try { var sv = JSON.parse(localStorage.getItem("volxau") || "null"); if (sv) for (var k in S) if (k in sv) S[k] = sv[k]; } catch(e){}
+  if (!SOURCES[S.source]) S.source = "deriv";
+  if (!S.symbol) S.symbol = SOURCES[S.source].symbol;
+
+  /* ======================= estado ======================= */
+  var gen = 0, ws = null, timers = [], attempts = 0;
+  var candles = [], loading = false, lastQuote = null, dirty = true;
+
+  function later(fn, ms){ var g = gen, id = setTimeout(function(){ if (g === gen) fn(); }, ms); timers.push(id); return id; }
+  function every(fn, ms){ var g = gen, id = setInterval(function(){ if (g === gen) fn(); }, ms); timers.push(id); return id; }
+  function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  function isTicks(){ return SOURCES[S.source].kind === "ticks"; }
+  function weight(q){ return (!isTicks() && S.measure === "vol") ? q : 1; }
+
+  /* ======================= cálculo ======================= */
+  function rnd(p){ if (S.dec < 0) return p; var kf = Math.pow(10, S.dec); return Math.trunc(p * kf) / kf; }
+
+  function buildCandles(ticks){            // ticks {t (s), p, q} en orden ascendente
+    var out = [], cur = null;
+    for (var i = 0; i < ticks.length; i++){
+      var p = rnd(ticks[i].p), b = Math.floor(ticks[i].t / S.bar) * S.bar;
+      if (!cur || cur.time !== b){ cur = { time:b, open:p, high:p, low:p, close:p, ticks:[], ref:p }; out.push(cur); }
+      else { if (p > cur.high) cur.high = p; if (p < cur.low) cur.low = p; cur.close = p; cur.ref = p; }
+      cur.ticks.push([p, ticks[i].q]);
+    }
+    out.reverse();                          // la más nueva primero
+    if (out.length > S.period + 5) out.length = S.period + 5;
+    return out;
+  }
+
+  function onLive(t, price, q){
+    var p = rnd(price), b = Math.floor(t / S.bar) * S.bar, c0 = candles[0];
+    if (!c0 || b > c0.time){
+      candles.unshift({ time:b, open:p, high:p, low:p, close:p, ticks:(isTicks() && !S.countAll) ? [] : [[p, q]], ref:p });
+      if (candles.length > S.period + 5) candles.length = S.period + 5;
+    } else if (b === c0.time){
+      if (p > c0.high) c0.high = p; if (p < c0.low) c0.low = p;
+      if (!isTicks() || S.countAll || c0.close !== p){ c0.close = p; c0.ref = p; c0.ticks.push([p, q]); }
+    }
+    dirty = true;
+  }
+
+  function levelsOf(list){
+    var m = new Map();
+    for (var i = 0; i < list.length; i++){ var p = list[i][0]; m.set(p, (m.get(p) || 0) + weight(list[i][1])); }
+    return Array.from(m).sort(function(a, b){ return b[0] - a[0]; });   // de mayor a menor precio
+  }
+
+  function analyze(c){
+    var lv = levelsOf(c.ticks);
+    if (!lv.length) return null;
+    var max = 0, idx = 0;
+    for (var i = 0; i < lv.length; i++) if (lv[i][1] >= max){ max = lv[i][1]; idx = i; }
+    var poc = lv[idx][0];
+    var pct = Number((idx * 100 / lv.length).toFixed());
+    var color = c.close < c.open ? "red" : c.close > c.open ? "green" : "grey", dir;
+    if (color === "red"){ dir = pct === 50 ? "0" : "down"; pct = 100 - pct; }
+    else if (color === "green"){ dir = pct === 50 ? "0" : "up"; }
+    else dir = "0";
+    var up, down;
+    if (dir === "up"){ up = pct; down = 100 - pct; }
+    else if (dir === "down"){ up = 100 - pct; down = pct; }
+    else { up = pct; down = pct; }
+    var tone = poc < c.ref ? "green" : poc > c.ref ? "red" : "white";
+    return { levels:lv, max:max, poc:poc, pct:pct, dir:dir, up:up, down:down, tone:tone };
+  }
+
+  /* ======================= utilidades de conexión ======================= */
+  function setStatus(txt, cls){ $("stxt").textContent = txt; $("dot").className = cls || ""; }
+  function fail(msg){ $("err").textContent = msg; }
+
+  function stopAll(){
+    gen++;
+    timers.forEach(function(id){ clearTimeout(id); clearInterval(id); }); timers = [];
+    if (ws){ try { ws.onclose = null; ws.onmessage = null; ws.close(); } catch(e){} ws = null; }
+  }
+
+  function scheduleReconnect(){
+    attempts++;
+    var wait = Math.min(1000 * Math.pow(1.5, attempts), 30000);
+    setStatus("Sin conexión. Reintento en " + Math.round(wait / 1000) + " s", "bad");
+    later(start, wait);
+  }
+
+  function targetStart(){ var now = Math.floor(Date.now() / 1000); return Math.floor(now / S.bar) * S.bar - S.period * S.bar; }
+
+  function finish(ticks, extraNote){
+    ticks.sort(function(a, b){ return a.t - b.t; });
+    if (!ticks.length){ fail("La fuente no devolvió datos para " + S.symbol + "."); setStatus("Sin datos", "bad"); return false; }
+    candles = buildCandles(ticks);
+    lastQuote = ticks[ticks.length - 1].p;
+    loading = false; dirty = true; attempts = 0;
+    setStatus("En vivo · " + ticks.length + (isTicks() ? " ticks" : " operaciones") + " cargadas" + (extraNote || ""), "ok");
+    return true;
+  }
+
+  async function getJSON(url, g){
+    for (var tries = 0; tries < 6; tries++){
+      if (g !== gen) throw new Error("cancelado");
+      var r = await fetch(url);
+      if (r.status === 429 || r.status === 418){ await sleep(3000 + tries * 2000); continue; }
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }
+    throw new Error("demasiadas solicitudes");
+  }
+
+  /* ======================= fuente: Deriv ======================= */
+  var derivUrl = 0;
+  function startDeriv(){
+    var g = gen, reqId = 0, hist = [], tStart = targetStart(), lastEpoch = 0, opened = false;
+    function send(o){ o.req_id = ++reqId; if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+    ws = new WebSocket(DERIV_URLS[derivUrl]);
+    ws.onopen = function(){
+      opened = true; setStatus("Cargando historial…", "load");
+      send({ ticks_history:S.symbol, style:"ticks", end:"latest", count:1000 });
+      every(function(){ send({ time:1 }); }, 30000);
+    };
+    ws.onclose = function(){ if (g !== gen) return; if (!opened) derivUrl = (derivUrl + 1) % DERIV_URLS.length; scheduleReconnect(); };
+    ws.onmessage = function(ev){
+      if (g !== gen) return;
+      var d = JSON.parse(ev.data);
+      if (d.error){
+        var code = d.error.code || "";
+        if (code === "RateLimit" || code === "TooManyRequests"){ var req = d.echo_req; delete req.req_id; later(function(){ send(req); }, 4000); return; }
+        if (code === "MarketIsClosed"){ $("srcNote").textContent = "Deriv: mercado cerrado."; return; }
+        if (/already subscribed/i.test(d.error.message || "")) return;
+        fail("Deriv respondió: " + (d.error.message || code));
+        if (loading) setStatus("Error", "bad");
+        return;
+      }
+      if (d.msg_type === "history"){
+        var p = d.history.prices, t = d.history.times;
+        for (var i = 0; i < p.length; i++) hist.push({ t:+t[i], p:+p[i], q:1 });
+        if (!hist.length){ finish(hist); return; }
+        var first = Infinity, last = 0;
+        for (i = 0; i < hist.length; i++){ if (hist[i].t < first) first = hist[i].t; if (hist[i].t > last) last = hist[i].t; }
+        setStatus("Cargando historial… " + Math.min(100, Math.round((last - first) / Math.max(1, last - tStart) * 100)) + "% (" + hist.length + " ticks)", "load");
+        if (first <= tStart || hist.length >= MAX_TICKS || p.length < 2){
+          var seen = {}, clean = [];
+          for (i = 0; i < hist.length; i++) if (!seen[hist[i].t]){ seen[hist[i].t] = 1; clean.push(hist[i]); }
+          if (finish(clean)){ lastEpoch = lastEpochOf(clean); send({ ticks:S.symbol, subscribe:1 }); }
+          return;
+        }
+        var next = { ticks_history:S.symbol, style:"ticks", end:first - 1, count:1000 };
+        later(function(){ send(next); }, 120);
+        return;
+      }
+      if (d.msg_type === "tick" && d.tick && d.tick.symbol === S.symbol){
+        var e = +d.tick.epoch, q = +d.tick.quote;
+        lastQuote = q;
+        if (loading || e <= lastEpoch) return;
+        lastEpoch = e; onLive(e, q, 1);
+      }
+    };
+    function lastEpochOf(arr){ return arr[arr.length - 1].t; }
+  }
+
+  /* ======================= fuentes con operaciones (Binance / OKX) ======================= */
+  function startTrades(cfg){
+    var g = gen, buffer = [], lastId = null, opened = false;
+    ws = new WebSocket(cfg.wsUrl);
+    ws.onopen = function(){
+      opened = true;
+      if (cfg.subscribe) ws.send(JSON.stringify(cfg.subscribe));
+      if (cfg.ping) every(function(){ if (ws && ws.readyState === 1) ws.send(cfg.ping); }, 20000);
+    };
+    ws.onclose = function(){ if (g === gen) scheduleReconnect(); };
+    ws.onmessage = function(ev){
+      if (g !== gen || ev.data === "pong") return;
+      var list = cfg.parseLive(JSON.parse(ev.data));
+      for (var i = 0; i < list.length; i++){
+        var tr = list[i];
+        lastQuote = tr.p;
+        if (loading){ buffer.push(tr); continue; }
+        if (lastId !== null && cfg.cmpId(tr.id, lastId) <= 0) continue;
+        lastId = tr.id; onLive(tr.t, tr.p, tr.q);
+      }
+    };
+    setStatus("Cargando historial…", "load");
+    cfg.loadHistory(g, targetStart()).then(function(hist){
+      if (g !== gen) return;
+      var byId = new Map();
+      hist.forEach(function(tr){ byId.set(String(tr.id), tr); });
+      buffer.forEach(function(tr){ byId.set(String(tr.id), tr); });
+      var all = Array.from(byId.values()).sort(function(a, b){ return cfg.cmpId(a.id, b.id); });
+      buffer = [];
+      if (finish(all)) lastId = all[all.length - 1].id;
+      if (!opened) setStatus("Historial cargado; esperando conexión en vivo…", "load");
+    }).catch(function(err){
+      if (g !== gen) return;
+      loading = false; dirty = true;
+      fail("No se pudo cargar el historial de " + cfg.name + " (" + err.message + "). Probá con otra fuente.");
+      setStatus("Error", "bad");
+    });
+  }
+
+  function cmpNum(a, b){ return Number(a) - Number(b); }
+
+  function startBinance(){
+    var sym = S.symbol.toUpperCase();
+    startTrades({
+      name:"Binance",
+      wsUrl:"wss://fstream.binance.com/market/ws/" + sym.toLowerCase() + "@aggTrade",
+      cmpId:cmpNum,
+      parseLive:function(d){ return d.e === "aggTrade" ? [{ id:d.a, t:d.T / 1000, p:+d.p, q:+d.q }] : []; },
+      loadHistory:async function(g, tStart){
+        var base = "https://fapi.binance.com/fapi/v1/aggTrades?symbol=" + sym, out = [];
+        var endMs = Date.now(), from = null, s = tStart * 1000;
+        while (from === null && s < endMs){                     // primer id dentro del período
+          var first = await getJSON(base + "&startTime=" + s + "&endTime=" + Math.min(s + 3600000 - 1, endMs) + "&limit=1", g);
+          if (first.length) from = first[0].a; else s += 3600000;
+        }
+        if (from === null) return out;
+        for (var calls = 0; calls < 400; calls++){
+          var page = await getJSON(base + "&fromId=" + from + "&limit=1000", g);
+          for (var i = 0; i < page.length; i++) out.push({ id:page[i].a, t:page[i].T / 1000, p:+page[i].p, q:+page[i].q });
+          if (out.length) setStatus("Cargando historial… " + pctDone(out[out.length - 1].t, tStart) + "% (" + out.length + " operaciones)", "load");
+          if (page.length < 1000 || page[page.length - 1].T >= endMs || out.length >= MAX_TICKS) break;
+          from = page[page.length - 1].a + 1;
+          await sleep(60);
+        }
+        return out;
+      }
+    });
+  }
+
+  function startOkx(){
+    var inst = S.symbol.toUpperCase();
+    startTrades({
+      name:"OKX",
+      wsUrl:"wss://ws.okx.com/ws/v5/public",
+      subscribe:{ op:"subscribe", args:[{ channel:"trades", instId:inst }] },
+      ping:"ping",
+      cmpId:cmpNum,
+      parseLive:function(d){
+        if (d.event === "error"){ fail("OKX respondió: " + d.msg); return []; }
+        if (!d.data || !d.arg || d.arg.channel !== "trades") return [];
+        return d.data.map(function(x){ return { id:x.tradeId, t:+x.ts / 1000, p:+x.px, q:+x.sz }; });
+      },
+      loadHistory:async function(g, tStart){
+        var base = "https://www.okx.com/api/v5/market/history-trades?instId=" + inst + "&limit=100&type=1", out = [], after = "";
+        var nowS = Date.now() / 1000;
+        for (var calls = 0; calls < 900; calls++){
+          var j = await getJSON(base + (after ? "&after=" + after : ""), g);
+          if (j.code !== "0") throw new Error(j.msg || ("código " + j.code));
+          var page = j.data || [];
+          for (var i = 0; i < page.length; i++) out.push({ id:page[i].tradeId, t:+page[i].ts / 1000, p:+page[i].px, q:+page[i].sz });
+          if (!page.length) break;
+          var oldest = +page[page.length - 1].ts / 1000;
+          setStatus("Cargando historial… " + Math.min(100, Math.round((nowS - oldest) / Math.max(1, nowS - tStart) * 100)) + "% (" + out.length + " operaciones)", "load");
+          if (oldest <= tStart || out.length >= MAX_TICKS) break;
+          after = page[page.length - 1].tradeId;
+          await sleep(110);                                    // límite de OKX: 20 pedidos cada 2 s
+        }
+        return out.filter(function(tr){ return tr.t >= tStart; });
+      }
+    });
+  }
+
+  function pctDone(t, tStart){ var now = Date.now() / 1000; return Math.min(100, Math.round((t - tStart) / Math.max(1, now - tStart) * 100)); }
+
+  function start(){
+    stopAll();
+    candles = []; loading = true; lastQuote = null; dirty = true;
+    fail(""); $("srcNote").textContent = SOURCES[S.source].note;
+    setStatus("Conectando…", "load");
+    try {
+      if (S.source === "binance") startBinance();
+      else if (S.source === "okx") startOkx();
+      else startDeriv();
+    } catch(e){ fail("No se pudo conectar: " + e.message); scheduleReconnect(); }
+  }
+
+  /* ======================= dibujo ======================= */
+  function hhmm(sec){ var d = new Date(sec * 1000); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
+  function fmt(p){ return S.dec >= 0 ? Number(p).toFixed(S.dec) : String(p); }
+  function vol(v){ return (Math.round(v * 1000) / 1000).toLocaleString("es-AR"); }
+  function unit(){ return isTicks() ? "ticks" : (S.measure === "vol" ? "vol." : "oper."); }
+  function arrow(dir){ return dir === "up" ? "⬈" : dir === "down" ? "⬊" : "⬍"; }
+  function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+  function total(c){ var s = 0; for (var i = 0; i < c.ticks.length; i++) s += weight(c.ticks[i][1]); return s; }
+
+  function drawProfile(cv, lv, max, ref, poc){
+    var dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    var x = cv.getContext("2d"); x.scale(dpr, dpr); x.clearRect(0, 0, w, h);
+    var rh = h / lv.length;
+    for (var i = 0; i < lv.length; i++){
+      x.fillStyle = lv[i][0] === poc ? css("--gold") : lv[i][0] > ref ? "#1f7a40" : "#a8392b";
+      x.fillRect(0, i * rh, Math.max(1, w * lv[i][1] / max), Math.max(1, rh - (rh > 3 ? 1 : 0)));
+    }
+  }
+
+  function heroHTML(a, c, closed){
+    if (!a) return '<div class="note">Todavía sin datos en esta vela.</div>';
+    var upCls = "side up" + (a.tone === "red" ? " dim" : ""), dnCls = "side down" + (a.tone === "green" ? " dim" : "");
+    var msg = a.tone === "white" ? "Precio sobre el máx. volumen"
+            : a.tone === "green" ? "Máx. volumen por debajo del precio" : "Máx. volumen por encima del precio";
+    return '<div class="pair"><div class="' + upCls + '">▲<span class="num">' + a.up + '<small>%</small></span></div>' +
+           '<div class="' + dnCls + '">▼<span class="num">' + a.down + '<small>%</small></span></div></div>' +
+           '<div class="note">' + msg + ' · máx. vol. <b class="num">' + fmt(a.poc) + '</b> (' + vol(a.max) + ' ' + unit() + ') · ' +
+           (closed ? 'cierre' : 'precio') + ' <b class="num">' + fmt(c.close) + '</b></div>';
+  }
+
+  function render(){
+    dirty = false;
+    var n = Math.min(S.period, candles.length);
+    if (!n){
+      $("now").innerHTML = $("prev").innerHTML = '<div class="note">' + (loading ? "Cargando…" : "Sin datos.") + '</div>';
+      $("cols").textContent = ""; $("gpoc").textContent = "—"; $("ticksInfo").textContent = "";
+      var gp = $("gprof"); gp.getContext("2d").clearRect(0, 0, gp.width, gp.height);
+      return;
+    }
+    var an = [], tot = [], maxTot = 0, all = [];
+    for (var i = 0; i < n; i++){
+      an[i] = analyze(candles[i]); tot[i] = total(candles[i]);
+      if (tot[i] > maxTot) maxTot = tot[i];
+      for (var j = 0; j < candles[i].ticks.length; j++) all.push(candles[i].ticks[j]);
+    }
+    $("now").innerHTML = heroHTML(an[0], candles[0], false);
+    $("nowTitle").textContent = "Vela en curso (" + hhmm(candles[0].time) + ")";
+    if (n > 1){ $("prev").innerHTML = heroHTML(an[1], candles[1], true); $("prevTitle").textContent = "Vela anterior, cerrada (" + hhmm(candles[1].time) + ")"; }
+    else $("prev").innerHTML = '<div class="note">Sin vela anterior.</div>';
+
+    var cols = $("cols"); cols.textContent = "";
+    for (i = n - 1; i >= 0; i--){
+      var c = candles[i], a = an[i], el = document.createElement("div");
+      el.className = "col" + (i === 0 ? " now" : "");
+      var barColor = c.close < c.open ? css("--down") : c.close > c.open ? css("--up") : css("--flat");
+      el.innerHTML =
+        '<div class="pct num t-' + (a ? a.tone : "white") + '">' + (a ? arrow(a.dir) + a.pct : "—") + '</div>' +
+        '<div class="poc num">' + (a ? fmt(a.poc) : "—") + '</div>' +
+        '<div class="cnt num">' + (a ? vol(a.max) + " en el máx." : "") + '</div>' +
+        '<canvas></canvas>' +
+        '<div class="vbar"><i style="height:' + (maxTot ? Math.round(tot[i] / maxTot * 100) : 0) + '%;background:' + barColor + '"></i></div>' +
+        '<div class="cnt num">' + vol(tot[i]) + ' ' + unit() + '</div>' +
+        '<div class="time num">' + hhmm(c.time) + '</div>';
+      cols.appendChild(el);
+      if (a) drawProfile(el.querySelector("canvas"), a.levels, a.max, c.ref, a.poc);
+    }
+    cols.scrollLeft = cols.scrollWidth;
+
+    var glv = levelsOf(all), gmax = 0, gpoc = null;
+    for (i = 0; i < glv.length; i++) if (glv[i][1] > gmax){ gmax = glv[i][1]; gpoc = glv[i][0]; }
+    if (glv.length){ drawProfile($("gprof"), glv, gmax, candles[0].close, gpoc); $("gpoc").textContent = fmt(gpoc) + " (" + vol(gmax) + " " + unit() + ")"; }
+    $("ticksInfo").textContent = all.length + (isTicks() ? " ticks" : " operaciones") + " en " + n + " velas";
+  }
+
+  function tickClock(){
+    if (lastQuote !== null) $("price").textContent = fmt(rnd(lastQuote));
+    if (candles.length && !loading){
+      var left = candles[0].time + S.bar - Math.floor(Date.now() / 1000);
+      if (left < 0) left = 0;
+      var m = Math.floor(left / 60), s = left % 60;
+      $("left").textContent = (m ? m + " min " : "") + String(s).padStart(2, "0") + " s";
+    }
+  }
+  setInterval(function(){ if (dirty) render(); tickClock(); }, 250);
+  window.addEventListener("resize", function(){ dirty = true; });
+
+  /* ======================= controles ======================= */
+  function syncControls(){
+    $("source").value = S.source; $("symbol").value = S.symbol; $("bar").value = String(S.bar);
+    $("period").value = S.period; $("dec").value = String(S.dec); $("measure").value = S.measure;
+    $("countAll").checked = !!S.countAll;
+    $("measureBox").classList.toggle("hide", isTicks());
+    $("countAllBox").classList.toggle("hide", !isTicks());
+  }
+  function save(){ try { localStorage.setItem("volxau", JSON.stringify(S)); } catch(e){} }
+  function readControls(){
+    S.symbol = $("symbol").value.trim() || SOURCES[S.source].symbol;
+    S.bar = parseInt($("bar").value, 10) || 900;
+    S.period = Math.max(2, Math.min(40, parseInt($("period").value, 10) || 10));
+    S.dec = parseInt($("dec").value, 10);
+    S.measure = $("measure").value;
+    S.countAll = $("countAll").checked;
+  }
+  $("source").addEventListener("change", function(){
+    S.source = $("source").value; S.symbol = SOURCES[S.source].symbol;
+    syncControls(); readControls(); save(); attempts = 0; start();
+  });
+  ["symbol", "bar", "period", "dec"].forEach(function(id){
+    $(id).addEventListener("change", function(){ readControls(); save(); attempts = 0; start(); });
+  });
+  $("measure").addEventListener("change", function(){ readControls(); save(); dirty = true; });
+  $("countAll").addEventListener("change", function(){ readControls(); save(); });
+
+  window.__vol = { analyze:analyze, buildCandles:buildCandles, S:S };
+  syncControls();
+  start();
+})();
+</script>
+</body>
+</html>
