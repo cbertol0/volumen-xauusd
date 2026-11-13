@@ -47,6 +47,10 @@
     padding:8px 6px 6px;display:flex;flex-direction:column;align-items:center;gap:4px}
   .col.now{border-color:var(--gold)}
   .pct{font-size:19px;font-weight:700}
+  .pat{font-size:11.5px;font-weight:650;border-radius:5px;padding:1px 6px;white-space:nowrap}
+  .pat.buy{background:#123d22;color:#7ee2a0} .pat.sell{background:#4a1a14;color:#ffa595} .pat.none{background:#2a3140;color:var(--muted)}
+  .patline{margin-top:10px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px}
+  .patline .pat{font-size:13px;padding:3px 9px}
   .t-green{color:var(--up)} .t-red{color:var(--down)} .t-white{color:var(--text)}
   .poc{font-size:12px;color:var(--text)} .cnt{font-size:11px;color:var(--muted);text-align:center}
   .col canvas{width:100%;height:230px;display:block;border-radius:4px;background:#141922}
@@ -133,6 +137,7 @@
     <summary>Cómo se calcula</summary>
     <p>En cada vela se suma el volumen que cayó en cada precio. El precio con más volumen es el máximo volumen. El porcentaje indica en qué lugar del rango de la vela quedó ese precio, contando los niveles desde el máximo hacia abajo: si la vela es alcista se muestra ese valor con ⬈; si es bajista, 100 menos ese valor con ⬊; si da 50 o la vela no tiene cuerpo, ⬍.</p>
     <p>El color compara el máximo volumen con el último precio de la vela: verde si el máximo volumen está por debajo, rojo si está por encima.</p>
+    <p><b>Patrón</b> (tabla de va-mod): la forma es <b>P</b> si el máximo volumen está en el tercio superior del rango, <b>b</b> si está en el tercio inferior y <b>D</b> si está en el medio. Si la vela cerró por encima del máximo volumen marca <b>compra</b>; por debajo, <b>venta</b>; la forma D no da señal. "Bien" quiere decir que la señal va a favor del color de la vela (continuación) y "Cuidado" que va en contra (posible giro). Es una regla visual, no una probabilidad.</p>
     <p><b>Deriv</b> da ticks de precio (uno por segundo, aprox.) sin volumen real: ahí el volumen es la cantidad de ticks, igual que en va-mod.ru. <b>Binance</b> y <b>OKX</b> dan operaciones reales de sus futuros perpetuos de oro, con tamaño: se puede medir por volumen negociado o por cantidad de operaciones. Esos contratos cotizan en USDT y 24 h, así que el precio difiere unos dólares del XAUUSD de tu broker y también hay datos el fin de semana.</p>
   </details>
 </main>
@@ -219,7 +224,28 @@
     else if (dir === "down"){ up = 100 - pct; down = pct; }
     else { up = pct; down = pct; }
     var tone = poc < c.ref ? "green" : poc > c.ref ? "red" : "white";
-    return { levels:lv, max:max, poc:poc, pct:pct, dir:dir, up:up, down:down, tone:tone };
+    return { levels:lv, max:max, poc:poc, pct:pct, dir:dir, up:up, down:down, tone:tone, pat:pattern(c, idx, lv.length, poc) };
+  }
+
+  /* Patrón según la tabla de va-mod (РОСТ/ПАДЕНИЕ · P/Ь/D · ХОРОШО/ОСТОРОЖНО):
+     forma = dónde está el máx. volumen en el rango (P arriba, b abajo, D en el medio);
+     señal = de qué lado del máx. volumen cerró la vela (arriba → compra, abajo → venta);
+     "Bien" si la señal va a favor del color de la vela, "Cuidado" si va en contra. */
+  function pattern(c, idx, nLevels, poc){
+    var pos = nLevels > 1 ? idx / (nLevels - 1) : 0.5;              // 0 = arriba de todo, 1 = abajo de todo
+    var shape = pos < 1/3 ? "P" : pos > 2/3 ? "b" : "D";
+    var color = c.close > c.open ? "up" : c.close < c.open ? "down" : "flat";
+    var side = c.ref > poc ? "buy" : c.ref < poc ? "sell" : "none";
+    if (shape === "D") side = "none";
+    var verdict = side === "none" || color === "flat" ? "" :
+                  ((side === "buy") === (color === "up") ? "Bien" : "Cuidado");
+    var shapeTxt = shape === "P" ? "volumen arriba" : shape === "b" ? "volumen abajo" : "volumen en el medio";
+    var sideTxt = side === "buy" ? "COMPRA" : side === "sell" ? "VENTA" : "sin señal";
+    var why = shape === "D" ? "equilibrio: puede ir para cualquier lado"
+            : side === "buy" ? "cerró por encima del máx. volumen"
+            : side === "sell" ? "cerró por debajo del máx. volumen" : "cerró en el máx. volumen";
+    return { shape:shape, side:side, verdict:verdict, shapeTxt:shapeTxt, sideTxt:sideTxt, why:why,
+             short:shape + " · " + (side === "buy" ? "▲ compra" : side === "sell" ? "▼ venta" : "—") };
   }
 
   /* ======================= utilidades de conexión ======================= */
@@ -300,7 +326,7 @@
           if (finish(clean)){ lastEpoch = lastEpochOf(clean); send({ ticks:S.symbol, subscribe:1 }); }
           return;
         }
-        var next = { ticks_history:S.symbol, style:"ticks", end:first - 1, count:1000 };
+        var next = { ticks_history:S.symbol, style:"ticks", start:first - 1 - 7200, end:first - 1, count:1000 };   // Deriv ignora "end" viejo si no va con "start"
         later(function(){ send(next); }, 120);
         return;
       }
@@ -459,7 +485,11 @@
     return '<div class="pair"><div class="' + upCls + '">▲<span class="num">' + a.up + '<small>%</small></span></div>' +
            '<div class="' + dnCls + '">▼<span class="num">' + a.down + '<small>%</small></span></div></div>' +
            '<div class="note">' + msg + ' · máx. vol. <b class="num">' + fmt(a.poc) + '</b> (' + vol(a.max) + ' ' + unit() + ') · ' +
-           (closed ? 'cierre' : 'precio') + ' <b class="num">' + fmt(c.close) + '</b></div>';
+           (closed ? 'cierre' : 'precio') + ' <b class="num">' + fmt(c.close) + '</b></div>' +
+           '<div class="patline"><span class="pat ' + a.pat.side + '">' + a.pat.shape + ' · ' + a.pat.sideTxt + '</span>' +
+           '<span>' + (closed ? '' : 'por ahora: ') + a.pat.shapeTxt + ', ' + a.pat.why +
+           (a.pat.verdict ? ' · <b>' + a.pat.verdict + '</b> (' + (a.pat.verdict === "Bien" ? "a favor de la vela" : "contra la vela") + ')' : '') +
+           '</span></div>';
   }
 
   function render(){
@@ -491,6 +521,7 @@
         '<div class="pct num t-' + (a ? a.tone : "white") + '">' + (a ? arrow(a.dir) + a.pct : "—") + '</div>' +
         '<div class="poc num">' + (a ? fmt(a.poc) : "—") + '</div>' +
         '<div class="cnt num">' + (a ? vol(a.max) + " en el máx." : "") + '</div>' +
+        (a ? '<div class="pat ' + a.pat.side + '" title="' + a.pat.shapeTxt + ', ' + a.pat.why + (a.pat.verdict ? ' · ' + a.pat.verdict : '') + '">' + a.pat.short + '</div>' : '') +
         '<canvas></canvas>' +
         '<div class="vbar"><i style="height:' + (maxTot ? Math.round(tot[i] / maxTot * 100) : 0) + '%;background:' + barColor + '"></i></div>' +
         '<div class="cnt num">' + vol(tot[i]) + ' ' + unit() + '</div>' +
@@ -556,7 +587,8 @@
       st = strength(analyze(c0));
       if (st && st.val >= S.thr){
         lastPre = c0.time; soundPre();
-        showAlert("pre", "Faltan " + Math.ceil(left) + " s · vela " + hhmm(c0.time) + " marca " + st.side + " " + st.val + " %");
+        var ap = analyze(c0).pat;
+        showAlert("pre", "Faltan " + Math.ceil(left) + " s · vela " + hhmm(c0.time) + " marca " + st.side + " " + st.val + " % · patrón " + ap.shape + " " + ap.sideTxt);
       }
     }
     // 2) Al cierre: la vela recién cerrada (con 1,5 s de margen para que lleguen los últimos datos)
@@ -567,7 +599,8 @@
       st = strength(analyze(closed));
       if (S.alClose && st && st.val >= S.thr){
         soundClose();
-        showAlert("close", "Cerró la vela " + hhmm(closed.time) + " con " + st.side + " " + st.val + " %");
+        var cp = analyze(closed).pat;
+        showAlert("close", "Cerró la vela " + hhmm(closed.time) + " con " + st.side + " " + st.val + " % · patrón " + cp.shape + " " + cp.sideTxt + (cp.verdict ? " (" + cp.verdict + ")" : ""));
       }
     }
   }
