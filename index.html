@@ -58,6 +58,18 @@
   details summary{cursor:pointer;color:var(--text)}
   details p{margin:6px 0}
   #err{color:var(--down);font-size:13px;min-height:1em}
+  .alerts{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;padding:8px 16px;background:#161b24;border-bottom:1px solid var(--line);font-size:12.5px}
+  .alerts .atitle{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .alerts label.chk{padding:0;font-size:12.5px;color:var(--text)}
+  .alerts input[type=number]{width:52px;min-width:0;padding:3px 5px}
+  .alerts button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:4px 9px;font:inherit;font-size:12px;cursor:pointer}
+  .alerts button:hover{border-color:var(--gold)}
+  #alertMsg{margin-left:auto;font-weight:650;border-radius:6px;padding:3px 10px;opacity:0;transition:opacity .3s}
+  #alertMsg.on{opacity:1}
+  #alertMsg.pre{background:#4a3a10;color:var(--gold)}
+  #alertMsg.close{background:#183a5a;color:#9fd0ff}
+  @keyframes flash{0%,100%{box-shadow:inset 0 0 0 0 transparent}50%{box-shadow:inset 0 0 0 4px var(--gold)}}
+  body.flash main{animation:flash .5s ease 3}
 </style>
 </head>
 <body>
@@ -65,8 +77,8 @@
   <h1>Volumen <b>XAUUSD</b></h1>
   <label>Fuente
     <select id="source">
-      <option value="deriv">Deriv · ticks (como va-mod)</option>
       <option value="binance">Binance Futuros · XAUUSDT</option>
+      <option value="deriv">Deriv · ticks (como va-mod)</option>
       <option value="okx">OKX · XAU-USDT-SWAP</option>
     </select></label>
   <label>Símbolo<input id="symbol" type="text" spellcheck="false"></label>
@@ -91,6 +103,15 @@
   <label class="chk" id="countAllBox"><input id="countAll" type="checkbox"> Contar ticks repetidos en vivo</label>
   <div id="status"><span id="stxt">Conectando…</span><span id="dot" class="load"></span></div>
 </header>
+<div class="alerts">
+  <span class="atitle">Alertas</span>
+  <label class="chk"><input id="alPre" type="checkbox"> Antes del cierre: si faltando <input id="preSecs" type="number" min="3" max="120" value="10"> s ya marca el umbral</label>
+  <label class="chk"><input id="alClose" type="checkbox"> Al cierre: si la vela cerró con el umbral</label>
+  <label class="chk">Umbral <input id="thr" type="number" min="50" max="100" value="90"> % (▲ o ▼)</label>
+  <button id="testPre" type="button">▶ Sonido antes del cierre</button>
+  <button id="testClose" type="button">▶ Sonido al cierre</button>
+  <span id="alertMsg"></span>
+</div>
 
 <main>
   <div id="err"></div>
@@ -131,9 +152,10 @@
   var MAX_TICKS = 150000;
 
   var $ = function(id){ return document.getElementById(id); };
-  var S = { source:"deriv", symbol:"", bar:900, period:10, dec:-1, measure:"vol", countAll:false };
+  var S = { source:"binance", symbol:"", bar:900, period:10, dec:-1, measure:"vol", countAll:false,
+            alPre:false, alClose:false, thr:90, preSecs:10 };
   try { var sv = JSON.parse(localStorage.getItem("volxau") || "null"); if (sv) for (var k in S) if (k in sv) S[k] = sv[k]; } catch(e){}
-  if (!SOURCES[S.source]) S.source = "deriv";
+  if (!SOURCES[S.source]) S.source = "binance";
   if (!S.symbol) S.symbol = SOURCES[S.source].symbol;
 
   /* ======================= estado ======================= */
@@ -172,6 +194,7 @@
       if (!isTicks() || S.countAll || c0.close !== p){ c0.close = p; c0.ref = p; c0.ticks.push([p, q]); }
     }
     dirty = true;
+    checkAlerts();
   }
 
   function levelsOf(list){
@@ -222,6 +245,7 @@
     ticks.sort(function(a, b){ return a.t - b.t; });
     if (!ticks.length){ fail("La fuente no devolvió datos para " + S.symbol + "."); setStatus("Sin datos", "bad"); return false; }
     candles = buildCandles(ticks);
+    resetAlerts();
     lastQuote = ticks[ticks.length - 1].p;
     loading = false; dirty = true; attempts = 0;
     setStatus("En vivo · " + ticks.length + (isTicks() ? " ticks" : " operaciones") + " cargadas" + (extraNote || ""), "ok");
@@ -481,6 +505,72 @@
     $("ticksInfo").textContent = all.length + (isTicks() ? " ticks" : " operaciones") + " en " + n + " velas";
   }
 
+  /* ======================= alertas sonoras ======================= */
+  var actx = null, lastPre = 0, lastClosed = 0, msgTimer = null;
+  function audio(){
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === "suspended") actx.resume();
+    } catch(e){ actx = null; }
+    return actx;
+  }
+  function tone(freq, start, dur, type, vol){
+    var a = audio(); if (!a) return;
+    var o = a.createOscillator(), g = a.createGain(), t = a.currentTime + start;
+    o.type = type || "sine"; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol || 0.3, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + dur + 0.05);
+  }
+  // Antes del cierre: tres pitidos agudos y cortos
+  function soundPre(){ [0, 0.18, 0.36].forEach(function(t){ tone(1320, t, 0.12, "square", 0.16); }); }
+  // Al cierre: campana de dos notas, más grave y larga
+  function soundClose(){ tone(784, 0, 0.45, "triangle", 0.4); tone(523, 0.32, 0.8, "triangle", 0.4); }
+
+  function strength(a){
+    if (!a) return null;
+    return a.up >= a.down ? { side:"▲", val:a.up } : { side:"▼", val:a.down };
+  }
+  function showAlert(kind, text){
+    var m = $("alertMsg");
+    m.textContent = text; m.className = "on " + kind;
+    document.body.classList.remove("flash"); void document.body.offsetWidth; document.body.classList.add("flash");
+    document.title = "🔔 " + text;
+    clearTimeout(msgTimer);
+    msgTimer = setTimeout(function(){ m.className = ""; document.title = "Volumen XAUUSD"; }, 12000);
+  }
+  function resetAlerts(){
+    var now = Date.now() / 1000;
+    lastClosed = 0; lastPre = 0;
+    for (var i = 0; i < candles.length; i++) if (candles[i].time + S.bar <= now){ lastClosed = candles[i].time; break; }
+    if (candles[0] && candles[0].time + S.bar - now <= S.preSecs) lastPre = candles[0].time;   // ya estamos dentro de la ventana
+  }
+  function checkAlerts(){
+    if (loading || !candles.length) return;
+    var now = Date.now() / 1000, c0 = candles[0], st;
+    // 1) Antes del cierre: dentro de los últimos N segundos de la vela en curso (una vez por vela)
+    var left = c0.time + S.bar - now;
+    if (S.alPre && left > 0 && left <= S.preSecs && lastPre !== c0.time){
+      st = strength(analyze(c0));
+      if (st && st.val >= S.thr){
+        lastPre = c0.time; soundPre();
+        showAlert("pre", "Faltan " + Math.ceil(left) + " s · vela " + hhmm(c0.time) + " marca " + st.side + " " + st.val + " %");
+      }
+    }
+    // 2) Al cierre: la vela recién cerrada (con 1,5 s de margen para que lleguen los últimos datos)
+    var closed = null;
+    for (var i = 0; i < candles.length; i++) if (candles[i].time + S.bar + 1.5 <= now){ closed = candles[i]; break; }
+    if (closed && closed.time > lastClosed){
+      lastClosed = closed.time;
+      st = strength(analyze(closed));
+      if (S.alClose && st && st.val >= S.thr){
+        soundClose();
+        showAlert("close", "Cerró la vela " + hhmm(closed.time) + " con " + st.side + " " + st.val + " %");
+      }
+    }
+  }
+
   function tickClock(){
     if (lastQuote !== null) $("price").textContent = fmt(rnd(lastQuote));
     if (candles.length && !loading){
@@ -490,7 +580,7 @@
       $("left").textContent = (m ? m + " min " : "") + String(s).padStart(2, "0") + " s";
     }
   }
-  setInterval(function(){ if (dirty) render(); tickClock(); }, 250);
+  setInterval(function(){ if (dirty) render(); tickClock(); checkAlerts(); }, 250);
   window.addEventListener("resize", function(){ dirty = true; });
 
   /* ======================= controles ======================= */
@@ -498,6 +588,8 @@
     $("source").value = S.source; $("symbol").value = S.symbol; $("bar").value = String(S.bar);
     $("period").value = S.period; $("dec").value = String(S.dec); $("measure").value = S.measure;
     $("countAll").checked = !!S.countAll;
+    $("alPre").checked = !!S.alPre; $("alClose").checked = !!S.alClose;
+    $("thr").value = S.thr; $("preSecs").value = S.preSecs;
     $("measureBox").classList.toggle("hide", isTicks());
     $("countAllBox").classList.toggle("hide", !isTicks());
   }
@@ -509,6 +601,9 @@
     S.dec = parseInt($("dec").value, 10);
     S.measure = $("measure").value;
     S.countAll = $("countAll").checked;
+    S.alPre = $("alPre").checked; S.alClose = $("alClose").checked;
+    S.thr = Math.max(50, Math.min(100, parseInt($("thr").value, 10) || 90));
+    S.preSecs = Math.max(3, Math.min(120, parseInt($("preSecs").value, 10) || 10));
   }
   $("source").addEventListener("change", function(){
     S.source = $("source").value; S.symbol = SOURCES[S.source].symbol;
@@ -519,6 +614,13 @@
   });
   $("measure").addEventListener("change", function(){ readControls(); save(); dirty = true; });
   $("countAll").addEventListener("change", function(){ readControls(); save(); });
+  ["alPre", "alClose", "thr", "preSecs"].forEach(function(id){
+    $(id).addEventListener("change", function(){ audio(); readControls(); save(); });
+  });
+  $("testPre").addEventListener("click", function(){ soundPre(); });
+  $("testClose").addEventListener("click", function(){ soundClose(); });
+  // El navegador solo habilita el sonido después de un clic en la página
+  document.addEventListener("pointerdown", function(){ audio(); }, { once:true });
 
   window.__vol = { analyze:analyze, buildCandles:buildCandles, S:S };
   syncControls();

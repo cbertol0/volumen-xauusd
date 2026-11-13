@@ -9,14 +9,14 @@ No necesita instalación, servidor ni cuentas: es un `index.html` que se conecta
 - **En tu compu:** descargá `index.html` y abrilo con doble clic (Chrome, Edge o Firefox).
 - **Online con GitHub Pages:** en el repo, *Settings → Pages → Branch: `main` / root → Save*. Queda en `https://<usuario>.github.io/volumen-xauusd/`. En un repo privado, GitHub Pages requiere un plan pago.
 
-La configuración elegida (fuente, temporalidad, cantidad de velas, redondeo) se guarda en el navegador.
+La configuración elegida (fuente, temporalidad, cantidad de velas, redondeo y alertas) se guarda en el navegador.
 
 ## Fuentes de datos
 
 | Fuente | Instrumento | Qué es el "volumen" | Horario | Notas |
 |---|---|---|---|---|
-| **Deriv** (por defecto) | `frxXAUUSD` | Cantidad de ticks (≈1 por segundo) | Horario forex, cerrado el fin de semana | La misma fuente que usa va-mod.ru. |
-| **Binance Futuros** | `XAUUSDT` (perpetuo TradFi) | Volumen negociado real, en onzas, o cantidad de operaciones | 24/7 | Historial rápido. Binance no está disponible desde EE. UU. |
+| **Deriv** | `frxXAUUSD` | Cantidad de ticks (≈1 por segundo) | Horario forex, cerrado el fin de semana | La misma fuente que usa va-mod.ru. |
+| **Binance Futuros** (por defecto) | `XAUUSDT` (perpetuo TradFi) | Volumen negociado real, en onzas, o cantidad de operaciones | 24/7 | Historial rápido. Binance no está disponible desde EE. UU. |
 | **OKX** | `XAU-USDT-SWAP` (perpetuo) | Volumen negociado real, en contratos de 0,001 oz, o cantidad de operaciones | 24/7 | Paso de precio de 0,1. El historial tarda más en cargar (de a 100 operaciones por pedido). |
 
 Si una fuente deja de funcionar, se elige otra desde el selector **Fuente**. Ninguna requiere clave.
@@ -39,6 +39,15 @@ Para cada vela:
 En las tarjetas superiores, ▲ y ▼ son ese porcentaje y su complemento, para la vela anterior (cerrada) y la vela en curso.
 
 Con la fuente Deriv, en vivo solo se cuenta un tick cuando cambia el precio, igual que va-mod.ru. La opción *Contar ticks repetidos en vivo* cuenta todos.
+
+## Alertas sonoras
+
+En la barra **Alertas**, debajo de los controles:
+
+- **Antes del cierre:** suenan tres pitidos agudos si, en los últimos segundos de la vela en curso (10 por defecto), ▲ o ▼ llega al umbral (90 % por defecto). Suena una sola vez por vela, la primera vez que se cumple dentro de esa ventana.
+- **Al cierre:** suena una campana de dos notas si la vela que acaba de cerrar quedó con ▲ o ▼ en el umbral o más. Se evalúa 1,5 s después del cierre, para que lleguen las últimas operaciones.
+
+Los botones ▶ prueban cada sonido. El navegador solo habilita el audio después de un clic en la página: si la abrís y no la tocás, no suena. Las alertas siguen funcionando con la pestaña en segundo plano, pero no con el navegador cerrado ni con la compu suspendida.
 
 ## Limitaciones
 
