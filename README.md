@@ -40,6 +40,18 @@ En las tarjetas superiores, ▲ y ▼ son ese porcentaje y su complemento, para 
 
 Con la fuente Deriv, en vivo solo se cuenta un tick cuando cambia el precio, igual que va-mod.ru. La opción *Contar ticks repetidos en vivo* cuenta todos.
 
+## Patrón de la vela
+
+Cada vela muestra además el patrón de la tabla de va-mod (РОСТ/ПАДЕНИЕ, P/Ь/D, ХОРОШО/ОСТОРОЖНО):
+
+- **Forma:** **P** si el máximo volumen está en el tercio superior del rango de la vela, **b** si está en el tercio inferior, **D** si está en el medio.
+- **Señal:** si la vela cerró por encima del máximo volumen marca **compra**; si cerró por debajo, **venta**. La forma D no da señal.
+- **Bien / Cuidado:** "Bien" cuando la señal va a favor del color de la vela (continuación) y "Cuidado" cuando va en contra (posible giro).
+
+En la vela en curso el patrón dice "por ahora", porque puede cambiar hasta el cierre. Las alertas incluyen el patrón en el mensaje.
+
+Ojo: el número grande (▲/▼) y el patrón pueden apuntar para lados opuestos. Por ejemplo, una vela alcista con el volumen arriba y cierre en el máximo marca ▼ 94 % y, a la vez, patrón P · compra · Bien.
+
 ## Alertas sonoras
 
 En la barra **Alertas**, debajo de los controles:
