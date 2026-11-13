@@ -320,6 +320,7 @@
     ws = new WebSocket(cfg.wsUrl);
     ws.onopen = function(){
       opened = true;
+      if (!loading) setStatus("En vivo", "ok");
       if (cfg.subscribe) ws.send(JSON.stringify(cfg.subscribe));
       if (cfg.ping) every(function(){ if (ws && ws.readyState === 1) ws.send(cfg.ping); }, 20000);
     };
